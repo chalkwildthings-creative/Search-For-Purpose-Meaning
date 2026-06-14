@@ -49,6 +49,21 @@ Then share both the URL **and** the code with your testers. The server rejects a
 request without the matching code, so it protects your credits even if someone
 finds the URL. To make the app fully open later, delete this variable and redeploy.
 
+### Optional: find real local nonprofits (live web search)
+If you want Logos to name real volunteer organizations near a user (after they
+share only their city or county — never name, age, or anything else), add:
+
+| Name | Value |
+|------|-------|
+| `ENABLE_WEB_SEARCH` | `true` |
+
+This turns on OpenRouter's web search so the app draws from real, current results
+and only names organizations that actually appear — it won't invent any. It adds a
+small per-search cost (check current pricing at openrouter.ai). With it **off**, the
+app still works: it points users to trusted directories (Idealist/VolunteerMatch,
+JustServe, 211) instead of naming specific local orgs. Nothing a user types is
+stored either way.
+
 Then click **Deploy**. You'll get a live URL like `https://logos-app.vercel.app`.
 
 That's it — open the URL and talk to it.

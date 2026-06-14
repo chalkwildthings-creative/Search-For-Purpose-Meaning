@@ -624,9 +624,6 @@ export default function App() {
               <span>Nietzsche — a line Frankl carried</span>
             </p>
             <p className="intro-body">
-              Frankl found that we don't uncover meaning by searching inside ourselves, but by giving ourselves to something beyond us — a cause to serve, a person to love. One of the surest ways to begin is to offer your gifts to a cause you believe in. Volunteering with a group whose purpose matches your own is often where a purpose of your own first appears.
-            </p>
-            <p className="intro-body">
               This is a quiet place to look for your why: what's worth moving toward, and what you might give to the world. Not a plan for your whole life. Just the next true step.
             </p>
             <button className="begin" onClick={() => setStarted(true)}>Begin</button>
