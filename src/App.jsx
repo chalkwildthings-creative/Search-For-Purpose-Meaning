@@ -28,6 +28,7 @@ export default function App() {
   const [convoMode, setConvoMode] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
   const [speechSupported, setSpeechSupported] = useState(true);
+  const [showResources, setShowResources] = useState(false);
   const scrollRef = useRef(null);
   const taRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -547,6 +548,54 @@ export default function App() {
 
         .logos-scroll::-webkit-scrollbar { width: 8px; }
         .logos-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+
+        .chips { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 2px; animation: rise 0.6s ease both; }
+        .chip {
+          border: 1px solid var(--line); background: #fff; cursor: pointer;
+          color: var(--ink-soft); font-family: 'Newsreader', serif; font-size: 14.5px;
+          padding: 9px 15px; border-radius: 30px; line-height: 1.2;
+          transition: color .15s, border-color .15s, transform .12s;
+        }
+        .chip:hover { color: var(--ember); border-color: var(--ember-soft); transform: translateY(-1px); }
+
+        .ways-link {
+          border: none; background: none; cursor: pointer;
+          font-family: 'Fraunces', serif; font-size: 12px; font-style: normal;
+          color: var(--ember); letter-spacing: 0.02em;
+          border-bottom: 1px dotted var(--ember-soft); padding: 0 0 1px;
+        }
+        .ways-link:hover { color: #a9501f; }
+        .ways-overlay {
+          position: absolute; inset: 0; z-index: 30;
+          display: flex; align-items: center; justify-content: center; padding: 24px;
+          background: rgba(28,24,20,0.5); backdrop-filter: blur(3px);
+          animation: fade 0.25s ease both;
+        }
+        .ways-card {
+          position: relative; background: #fbf4ea; color: var(--ink);
+          max-width: 440px; width: 100%; max-height: 82vh; overflow-y: auto;
+          border-radius: 18px; padding: 26px 26px 22px;
+          border: 1px solid var(--line); box-shadow: 0 30px 80px -30px rgba(28,24,20,0.6);
+        }
+        .ways-close {
+          position: absolute; top: 12px; right: 14px; border: none; background: none;
+          font-size: 26px; line-height: 1; color: var(--ink-soft); cursor: pointer;
+        }
+        .ways-close:hover { color: var(--ember); }
+        .ways-title { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; margin: 0 0 6px; }
+        .ways-intro { font-size: 14.5px; line-height: 1.6; color: var(--ink-soft); margin: 0 0 16px; }
+        .ways-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+        .ways-list li { display: flex; flex-direction: column; gap: 3px; }
+        .ways-list a {
+          font-family: 'Fraunces', serif; font-weight: 500; font-size: 16px;
+          color: var(--ember); text-decoration: none;
+        }
+        .ways-list a:hover { text-decoration: underline; }
+        .ways-list span { font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); }
+        .ways-note {
+          margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line);
+          font-size: 13px; line-height: 1.6; color: var(--ink-soft); font-style: italic;
+        }
       `}</style>
 
       {!unlocked && (
@@ -648,6 +697,19 @@ export default function App() {
               </div>
             </div>
           ))}
+          {messages.length === 1 && !loading && (
+            <div className="chips">
+              {[
+                "I feel lost about my future",
+                "Help me use my talents to do some good",
+                "I don't know what to study",
+              ].map((c) => (
+                <button key={c} className="chip" onClick={() => send(c)}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
           {loading && (
             <div className="row assistant">
               <div className="bubble assistant">
@@ -709,9 +771,47 @@ export default function App() {
           </button>
         </div>
         <p className="care">
+          <button className="ways-link" onClick={() => setShowResources(true)}>
+            Ways to do good near you
+          </button>
+        </p>
+        <p className="care">
           Logos is a reflection tool, not a therapist or crisis service. If things feel heavy, reach out — a trusted person, the <b>988</b> Lifeline (call or text), or text <b>HOME to 741741</b>.
         </p>
       </footer>
+
+      {showResources && (
+        <div className="ways-overlay" onClick={() => setShowResources(false)}>
+          <div className="ways-card" onClick={(e) => e.stopPropagation()}>
+            <button className="ways-close" onClick={() => setShowResources(false)} aria-label="Close">×</button>
+            <h2 className="ways-title">Ways to do good</h2>
+            <p className="ways-intro">
+              A few trustworthy places to start looking for real ways to help. These are national starting points — a counselor, teacher, parent, or mentor can help you find vetted options near you and confirm they are safe and real. Nothing you type here is saved.
+            </p>
+            <ul className="ways-list">
+              <li>
+                <a href="https://dosomething.org" target="_blank" rel="noopener noreferrer">DoSomething.org</a>
+                <span>Built for teens and young adults — climate, mental health, justice, education. Many actions you can do from your phone, no experience needed.</span>
+              </li>
+              <li>
+                <a href="https://www.idealist.org" target="_blank" rel="noopener noreferrer">Idealist</a>
+                <span>A large, searchable database of volunteer roles by location and cause (now includes VolunteerMatch).</span>
+              </li>
+              <li>
+                <a href="https://www.justserve.org" target="_blank" rel="noopener noreferrer">JustServe.org</a>
+                <span>Find service opportunities close to where you live.</span>
+              </li>
+              <li>
+                <a href="https://americorps.gov" target="_blank" rel="noopener noreferrer">AmeriCorps</a>
+                <span>National service programs, including options for older teens and young adults.</span>
+              </li>
+            </ul>
+            <p className="ways-note">
+              Close to home, your school, library, food bank, or community center are good places to ask too. Bring a trusted adult into the plan before you go.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
