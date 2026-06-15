@@ -555,6 +555,7 @@ export default function App() {
           font-size: 11.5px; font-style: italic; color: var(--ink-soft); line-height: 1.6;
         }
         .care b { font-style: normal; font-weight: 500; color: var(--ember); }
+        .mic-note { font-size: 10.5px; opacity: 0.75; margin-top: 5px; }
 
         .logos-scroll::-webkit-scrollbar { width: 8px; }
         .logos-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
@@ -624,11 +625,14 @@ export default function App() {
               <span>Nietzsche — a line Frankl carried</span>
             </p>
             <p className="intro-body">
+              Frankl found that we don't uncover meaning by searching inside ourselves, but by giving ourselves to something beyond us — a cause to serve, a person to love. One of the surest ways to begin is to offer your gifts to a cause you believe in. Volunteering with a group whose purpose matches your own is often where a purpose of your own first appears.
+            </p>
+            <p className="intro-body">
               This is a quiet place to look for your why: what's worth moving toward, and what you might give to the world. Not a plan for your whole life. Just the next true step.
             </p>
             <button className="begin" onClick={() => setStarted(true)}>Begin</button>
             <p className="intro-note">
-              Logos is a reflection tool, not a therapist or crisis service. If things feel dangerous, reach out now: <b>988</b> (call or text) or text <b>HOME to 741741</b>.
+              A few honest things first. Logos is an AI, not a person — here to help you think, not to diagnose or treat anything. It isn't therapy or a crisis service. Your conversation is anonymous: no name, email, or account, and the app doesn't save what you say — it stays in your browser while you're here. What you type is sent to an AI provider to write each reply. If you ever choose to share your city to find local ways to volunteer, it's used only in that moment, not saved. If things feel dangerous or like too much, reach a real person now: call or text <b>988</b>, text <b>HOME to 741741</b>, or your campus or school counselor. Intended for 12th graders and college students.
             </p>
           </div>
         </div>
@@ -760,8 +764,13 @@ export default function App() {
           </button>
         </p>
         <p className="care">
-          Logos is a reflection tool, not a therapist or crisis service. If things feel heavy, reach out — a trusted person, the <b>988</b> Lifeline (call or text), or text <b>HOME to 741741</b>.
+          Logos is a reflection tool, not a therapist or crisis service. Feeling heavy? Reach a trusted person, your campus or school counselor, the <b>988</b> Lifeline (call or text), or text <b>HOME to 741741</b>.
         </p>
+        {speechSupported && (
+          <p className="care mic-note">
+            Voice uses your browser's speech feature, which may send audio to the browser maker to turn it into text.
+          </p>
+        )}
       </footer>
 
       {showResources && (
