@@ -337,12 +337,12 @@ export default function App() {
         /* ── Gate ────────────────────────────────────────── */
         .gate {
           position: absolute; inset: 0; z-index: 20;
-          display: flex; align-items: center; justify-content: center;
+          display: flex; overflow-y: auto; -webkit-overflow-scrolling: touch;
           text-align: center; padding: 32px 26px;
           background: radial-gradient(140% 90% at 50% 8%, #3a2f25 0%, #241d17 45%, var(--deep) 100%);
           color: #f3e7d6; animation: fade 0.6s ease both;
         }
-        .gate-inner { position: relative; max-width: 380px; width: 100%; }
+        .gate-inner { position: relative; max-width: 380px; width: 100%; margin: auto; }
         .gate-msg {
           font-size: 15px; line-height: 1.6; color: #e3d4c0; font-weight: 300;
           margin: 4px auto 20px; max-width: 320px;
@@ -363,7 +363,7 @@ export default function App() {
         /* ── Welcome / intro ─────────────────────────────── */
         .intro {
           position: absolute; inset: 0; z-index: 10;
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          display: flex; overflow-y: auto; -webkit-overflow-scrolling: touch;
           text-align: center; padding: 32px 26px;
           background:
             radial-gradient(140% 90% at 50% 8%, #3a2f25 0%, #241d17 45%, var(--deep) 100%);
@@ -375,7 +375,7 @@ export default function App() {
           background: radial-gradient(60% 40% at 50% 30%, rgba(224,168,120,0.18), transparent 70%);
         }
         @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-        .intro-inner { position: relative; max-width: 540px; }
+        .intro-inner { position: relative; max-width: 540px; margin: auto; }
         .intro-name {
           font-family: 'Fraunces', serif; font-weight: 600;
           font-size: 40px; letter-spacing: -0.01em; margin: 0 0 4px;
