@@ -28,7 +28,6 @@ export default function App() {
   const [convoMode, setConvoMode] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
   const [speechSupported, setSpeechSupported] = useState(true);
-  const [showResources, setShowResources] = useState(false);
   const scrollRef = useRef(null);
   const taRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -247,12 +246,44 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: next, passcode: passcodeRef.current }),
       });
-      const data = await res.json();
-      if (!res.ok || typeof data?.reply !== "string") {
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || "Unexpected response");
       }
-      const reply = data.reply.trim();
-      setMessages((m) => [...m, { role: "assistant", content: reply || "…" }]);
+
+      // Always consume as SSE stream
+      let fullText = "";
+      let isFirst = true;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          let parsed;
+          try { parsed = JSON.parse(line.slice(6)); } catch { continue; }
+          if (parsed.error) throw new Error(parsed.error);
+          if (parsed.text) {
+            fullText += parsed.text;
+            if (isFirst) {
+              isFirst = false;
+              setMessages((m) => [...m, { role: "assistant", content: fullText }]);
+            } else {
+              setMessages((m) => {
+                const updated = [...m];
+                updated[updated.length - 1] = { role: "assistant", content: fullText };
+                return updated;
+              });
+            }
+          }
+        }
+      }
+      const reply = fullText.trim();
       if (voiceOnRef.current && reply) speak(reply);
       else if (convoModeRef.current) startListening();
     } catch (e) {
@@ -260,10 +291,7 @@ export default function App() {
         ...m,
         {
           role: "assistant",
-          content:
-            "Something interrupted us. (Technical detail: " +
-            (e?.message || String(e)) +
-            ")",
+          content: "Something interrupted us. (" + (e?.message || String(e)) + ")",
         },
       ]);
       if (convoModeRef.current) startListening();
@@ -309,7 +337,7 @@ export default function App() {
   return (
     <div className="logos-root">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=Inter:wght@400;500;600&display=swap');
 
         .logos-root {
           --ink: #2b2420;
@@ -320,6 +348,9 @@ export default function App() {
           --ember-soft: #e0a878;
           --line: #ddccba;
           --deep: #1c1814;
+          --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          --radius: 14px;
+          --radius-pill: 999px;
           position: absolute; inset: 0;
           background:
             radial-gradient(120% 80% at 50% -10%, #faf3e8 0%, var(--paper) 55%, var(--paper-2) 100%);
@@ -327,6 +358,17 @@ export default function App() {
           font-family: 'Newsreader', Georgia, serif;
           color: var(--ink);
           overflow: hidden;
+        }
+        .logos-root *:focus-visible {
+          outline: 2px solid var(--ember);
+          outline-offset: 2px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .logos-root *, .logos-root *::before, .logos-root *::after {
+            animation-duration: 0.001ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.001ms !important;
+          }
         }
         .logos-root::before {
           content: ""; position: absolute; inset: 0; pointer-events: none;
@@ -337,12 +379,12 @@ export default function App() {
         /* ── Gate ────────────────────────────────────────── */
         .gate {
           position: absolute; inset: 0; z-index: 20;
-          display: flex; overflow-y: auto; -webkit-overflow-scrolling: touch;
+          display: flex; align-items: center; justify-content: center;
           text-align: center; padding: 32px 26px;
           background: radial-gradient(140% 90% at 50% 8%, #3a2f25 0%, #241d17 45%, var(--deep) 100%);
           color: #f3e7d6; animation: fade 0.6s ease both;
         }
-        .gate-inner { position: relative; max-width: 380px; width: 100%; margin: auto; }
+        .gate-inner { position: relative; max-width: 380px; width: 100%; }
         .gate-msg {
           font-size: 15px; line-height: 1.6; color: #e3d4c0; font-weight: 300;
           margin: 4px auto 20px; max-width: 320px;
@@ -350,7 +392,7 @@ export default function App() {
         .gate-input {
           width: 100%; box-sizing: border-box;
           background: rgba(255,255,255,0.06); border: 1px solid #5a4a3a;
-          border-radius: 12px; padding: 13px 16px; color: #fbf1e3;
+          border-radius: var(--radius); padding: 13px 16px; color: #fbf1e3;
           font-family: 'Newsreader', serif; font-size: 16px; text-align: center;
           letter-spacing: 0.04em; outline: none; transition: border-color .15s;
         }
@@ -363,7 +405,7 @@ export default function App() {
         /* ── Welcome / intro ─────────────────────────────── */
         .intro {
           position: absolute; inset: 0; z-index: 10;
-          display: flex; overflow-y: auto; -webkit-overflow-scrolling: touch;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
           text-align: center; padding: 32px 26px;
           background:
             radial-gradient(140% 90% at 50% 8%, #3a2f25 0%, #241d17 45%, var(--deep) 100%);
@@ -375,7 +417,7 @@ export default function App() {
           background: radial-gradient(60% 40% at 50% 30%, rgba(224,168,120,0.18), transparent 70%);
         }
         @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-        .intro-inner { position: relative; max-width: 540px; margin: auto; }
+        .intro-inner { position: relative; max-width: 540px; }
         .intro-name {
           font-family: 'Fraunces', serif; font-weight: 600;
           font-size: 40px; letter-spacing: -0.01em; margin: 0 0 4px;
@@ -396,13 +438,13 @@ export default function App() {
           font-size: 18px; line-height: 1.6; color: #f0dcc4;
           margin: 22px auto; max-width: 420px;
         }
-        .intro-quote span { display: block; font-size: 12.5px; font-style: normal;
+        .intro-quote span { display: block; font-family: var(--sans); font-size: 11.5px; font-style: normal;
           letter-spacing: 0.08em; color: var(--ember-soft); margin-top: 10px; text-transform: uppercase; }
         .begin {
           margin-top: 26px; border: none; cursor: pointer;
           font-family: 'Fraunces', serif; font-size: 16px; font-weight: 500;
           color: #241d17; background: var(--ember-soft);
-          padding: 13px 38px; border-radius: 40px;
+          padding: 13px 38px; border-radius: var(--radius-pill);
           transition: transform .15s ease, background .15s ease;
         }
         .begin:hover { transform: translateY(-2px); background: #ecc79f; }
@@ -438,13 +480,13 @@ export default function App() {
         .bubble.assistant { color: var(--ink); }
         .bubble.user {
           background: #fff; border: 1px solid var(--line);
-          border-radius: 16px 16px 4px 16px; padding: 11px 16px;
+          border-radius: var(--radius) var(--radius) 4px var(--radius); padding: 11px 16px;
           font-size: 16.5px; color: #4a3f36; box-shadow: 0 1px 0 rgba(0,0,0,0.02);
         }
         .who {
-          font-family: 'Fraunces', serif; font-size: 11px;
-          letter-spacing: 0.14em; text-transform: uppercase;
-          color: var(--ember); margin-bottom: 6px; display: block; font-weight: 500;
+          font-family: var(--sans); font-size: 11px;
+          letter-spacing: 0.12em; text-transform: uppercase;
+          color: var(--ember); margin-bottom: 6px; display: block; font-weight: 600;
         }
 
         .think { display: flex; gap: 6px; padding: 4px 2px; }
@@ -460,7 +502,7 @@ export default function App() {
         }
         .composer {
           max-width: 640px; margin: 0 auto; display: flex; align-items: flex-end; gap: 10px;
-          background: #fff; border: 1px solid var(--line); border-radius: 18px;
+          background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
           padding: 8px 8px 8px 16px; box-shadow: 0 4px 24px -16px rgba(43,36,32,0.4);
         }
         .composer textarea {
@@ -470,7 +512,7 @@ export default function App() {
         }
         .composer textarea::placeholder { color: #b1a290; font-style: italic; }
         .send {
-          flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
+          flex-shrink: 0; width: 40px; height: 40px; border-radius: var(--radius-pill); border: none; cursor: pointer;
           background: var(--ember); color: #fff; display: grid; place-items: center;
           transition: transform .15s ease, background .15s ease, opacity .15s;
         }
@@ -478,7 +520,7 @@ export default function App() {
         .send:disabled { opacity: 0.4; cursor: default; }
 
         .mic {
-          flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%;
+          flex-shrink: 0; width: 40px; height: 40px; border-radius: var(--radius-pill);
           border: 1px solid var(--line); cursor: pointer;
           background: #fff; color: var(--ink-soft); display: grid; place-items: center;
           transition: transform .15s ease, background .15s ease, color .15s ease, border-color .15s;
@@ -496,7 +538,7 @@ export default function App() {
 
         .voice-toggle {
           position: absolute; top: 16px; right: 16px;
-          width: 34px; height: 34px; border-radius: 50%;
+          width: 34px; height: 34px; border-radius: var(--radius-pill);
           border: 1px solid var(--line); background: #fff; cursor: pointer;
           color: var(--ink-soft); display: grid; place-items: center;
           transition: color .15s, border-color .15s;
@@ -507,10 +549,10 @@ export default function App() {
         .convo-toggle {
           position: absolute; top: 14px; left: 16px;
           display: inline-flex; align-items: center; gap: 7px;
-          height: 34px; padding: 0 14px 0 11px; border-radius: 40px;
+          height: 34px; padding: 0 14px 0 11px; border-radius: var(--radius-pill);
           border: 1px solid var(--line); background: #fff; cursor: pointer;
-          color: var(--ink-soft); font-family: 'Fraunces', serif;
-          font-size: 13px; font-weight: 500;
+          color: var(--ink-soft); font-family: var(--sans);
+          font-size: 13px; font-weight: 600;
           transition: color .15s, border-color .15s, background .15s;
         }
         .convo-toggle:hover { color: var(--ember); border-color: var(--ember-soft); }
@@ -522,8 +564,8 @@ export default function App() {
         .talk-status {
           max-width: 640px; margin: 0 auto 10px;
           display: flex; align-items: center; gap: 10px;
-          font-size: 13.5px; color: var(--ink-soft);
-          font-style: italic;
+          font-family: var(--sans); font-size: 13px; color: var(--ink-soft);
+          font-style: normal;
         }
         .talk-status .dot3 {
           width: 9px; height: 9px; border-radius: 50%;
@@ -534,8 +576,8 @@ export default function App() {
         .talk-status.thinking .dot3 { background: var(--ember-soft); animation: pulse 1.4s ease-in-out infinite; }
         .talk-end {
           margin-left: auto; border: 1px solid var(--line); background: #fff;
-          color: var(--ink-soft); font-family: 'Fraunces', serif; font-size: 12px;
-          padding: 4px 14px; border-radius: 30px; cursor: pointer; font-style: normal;
+          color: var(--ink-soft); font-family: var(--sans); font-size: 12px; font-weight: 500;
+          padding: 4px 14px; border-radius: var(--radius-pill); cursor: pointer; font-style: normal;
           transition: color .15s, border-color .15s;
         }
         .talk-end:hover { color: var(--ember); border-color: var(--ember-soft); }
@@ -545,58 +587,9 @@ export default function App() {
           font-size: 11.5px; font-style: italic; color: var(--ink-soft); line-height: 1.6;
         }
         .care b { font-style: normal; font-weight: 500; color: var(--ember); }
-        .mic-note { font-size: 10.5px; opacity: 0.75; margin-top: 5px; }
 
         .logos-scroll::-webkit-scrollbar { width: 8px; }
-        .logos-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
-
-        .chips { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 2px; animation: rise 0.6s ease both; }
-        .chip {
-          border: 1px solid var(--line); background: #fff; cursor: pointer;
-          color: var(--ink-soft); font-family: 'Newsreader', serif; font-size: 14.5px;
-          padding: 9px 15px; border-radius: 30px; line-height: 1.2;
-          transition: color .15s, border-color .15s, transform .12s;
-        }
-        .chip:hover { color: var(--ember); border-color: var(--ember-soft); transform: translateY(-1px); }
-
-        .ways-link {
-          border: none; background: none; cursor: pointer;
-          font-family: 'Fraunces', serif; font-size: 12px; font-style: normal;
-          color: var(--ember); letter-spacing: 0.02em;
-          border-bottom: 1px dotted var(--ember-soft); padding: 0 0 1px;
-        }
-        .ways-link:hover { color: #a9501f; }
-        .ways-overlay {
-          position: absolute; inset: 0; z-index: 30;
-          display: flex; align-items: center; justify-content: center; padding: 24px;
-          background: rgba(28,24,20,0.5); backdrop-filter: blur(3px);
-          animation: fade 0.25s ease both;
-        }
-        .ways-card {
-          position: relative; background: #fbf4ea; color: var(--ink);
-          max-width: 440px; width: 100%; max-height: 82vh; overflow-y: auto;
-          border-radius: 18px; padding: 26px 26px 22px;
-          border: 1px solid var(--line); box-shadow: 0 30px 80px -30px rgba(28,24,20,0.6);
-        }
-        .ways-close {
-          position: absolute; top: 12px; right: 14px; border: none; background: none;
-          font-size: 26px; line-height: 1; color: var(--ink-soft); cursor: pointer;
-        }
-        .ways-close:hover { color: var(--ember); }
-        .ways-title { font-family: 'Fraunces', serif; font-weight: 500; font-size: 22px; margin: 0 0 6px; }
-        .ways-intro { font-size: 14.5px; line-height: 1.6; color: var(--ink-soft); margin: 0 0 16px; }
-        .ways-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
-        .ways-list li { display: flex; flex-direction: column; gap: 3px; }
-        .ways-list a {
-          font-family: 'Fraunces', serif; font-weight: 500; font-size: 16px;
-          color: var(--ember); text-decoration: none;
-        }
-        .ways-list a:hover { text-decoration: underline; }
-        .ways-list span { font-size: 13.5px; line-height: 1.5; color: var(--ink-soft); }
-        .ways-note {
-          margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line);
-          font-size: 13px; line-height: 1.6; color: var(--ink-soft); font-style: italic;
-        }
+        .logos-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: var(--radius-pill); }
       `}</style>
 
       {!unlocked && (
@@ -619,7 +612,7 @@ export default function App() {
               {checking ? "Checking…" : "Enter"}
             </button>
             <p className="intro-note">
-              Logos is an anonymous AI reflection tool, not a therapist or crisis service. If things feel dangerous, reach a real person now: call or text <b>988</b>, text <b>HOME to 741741</b>, or your campus or school counselor.
+              Logos is a reflection tool, not a therapist or crisis service. If things feel dangerous, reach out now: <b>988</b> (call or text) or text <b>HOME to 741741</b>.
             </p>
           </div>
         </div>
@@ -641,14 +634,11 @@ export default function App() {
               <span>Nietzsche — a line Frankl carried</span>
             </p>
             <p className="intro-body">
-              Frankl found that we don't uncover meaning by searching inside ourselves, but by giving ourselves to something beyond us — a cause to serve, a person to love. One of the surest ways to begin is to offer your gifts to a cause you believe in. Volunteering with a group whose purpose matches your own is often where a purpose of your own first appears.
-            </p>
-            <p className="intro-body">
               This is a quiet place to look for your why: what's worth moving toward, and what you might give to the world. Not a plan for your whole life. Just the next true step.
             </p>
             <button className="begin" onClick={() => setStarted(true)}>Begin</button>
             <p className="intro-note">
-              A few honest things first. Logos is an AI, not a person — here to help you think, not to diagnose or treat anything. It isn't therapy or a crisis service. Your conversation is anonymous: no name, email, or account, and the app doesn't save what you say — it stays in your browser while you're here. What you type is sent to an AI provider to write each reply. If you ever choose to share your city to find local ways to volunteer, it's used only in that moment, not saved. If things feel dangerous or like too much, reach a real person now: call or text <b>988</b>, text <b>HOME to 741741</b>, or your campus or school counselor. Intended for 12th graders and college students.
+              Logos is a reflection tool, not a therapist or crisis service. If things feel dangerous, reach out now: <b>988</b> (call or text) or text <b>HOME to 741741</b>.
             </p>
           </div>
         </div>
@@ -701,20 +691,7 @@ export default function App() {
               </div>
             </div>
           ))}
-          {messages.length === 1 && !loading && (
-            <div className="chips">
-              {[
-                "I feel lost about my future",
-                "Help me use my talents to do some good",
-                "I don't know what to study",
-              ].map((c) => (
-                <button key={c} className="chip" onClick={() => send(c)}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          )}
-          {loading && (
+          {loading && messages[messages.length - 1]?.role !== "assistant" && (
             <div className="row assistant">
               <div className="bubble assistant">
                 <span className="who">Logos</span>
@@ -775,52 +752,9 @@ export default function App() {
           </button>
         </div>
         <p className="care">
-          <button className="ways-link" onClick={() => setShowResources(true)}>
-            Ways to do good near you
-          </button>
+          Logos is a reflection tool, not a therapist or crisis service. If things feel heavy, reach out — a trusted person, the <b>988</b> Lifeline (call or text), or text <b>HOME to 741741</b>.
         </p>
-        <p className="care">
-          Logos is a reflection tool, not a therapist or crisis service. Feeling heavy? Reach a trusted person, your campus or school counselor, the <b>988</b> Lifeline (call or text), or text <b>HOME to 741741</b>.
-        </p>
-        {speechSupported && (
-          <p className="care mic-note">
-            Voice uses your browser's speech feature, which may send audio to the browser maker to turn it into text.
-          </p>
-        )}
       </footer>
-
-      {showResources && (
-        <div className="ways-overlay" onClick={() => setShowResources(false)}>
-          <div className="ways-card" onClick={(e) => e.stopPropagation()}>
-            <button className="ways-close" onClick={() => setShowResources(false)} aria-label="Close">×</button>
-            <h2 className="ways-title">Ways to do good</h2>
-            <p className="ways-intro">
-              A few trustworthy places to start looking for real ways to help. These are national starting points — a counselor, teacher, parent, or mentor can help you find vetted options near you and confirm they are safe and real. Nothing you type here is saved.
-            </p>
-            <ul className="ways-list">
-              <li>
-                <a href="https://dosomething.org" target="_blank" rel="noopener noreferrer">DoSomething.org</a>
-                <span>Built for teens and young adults — climate, mental health, justice, education. Many actions you can do from your phone, no experience needed.</span>
-              </li>
-              <li>
-                <a href="https://www.idealist.org" target="_blank" rel="noopener noreferrer">Idealist</a>
-                <span>A large, searchable database of volunteer roles by location and cause (now includes VolunteerMatch).</span>
-              </li>
-              <li>
-                <a href="https://www.justserve.org" target="_blank" rel="noopener noreferrer">JustServe.org</a>
-                <span>Find service opportunities close to where you live.</span>
-              </li>
-              <li>
-                <a href="https://americorps.gov" target="_blank" rel="noopener noreferrer">AmeriCorps</a>
-                <span>National service programs, including options for older teens and young adults.</span>
-              </li>
-            </ul>
-            <p className="ways-note">
-              Close to home, your school, library, food bank, or community center are good places to ask too. Bring a trusted adult into the plan before you go.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
