@@ -247,12 +247,44 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: next, passcode: passcodeRef.current }),
       });
-      const data = await res.json();
-      if (!res.ok || typeof data?.reply !== "string") {
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || "Unexpected response");
       }
-      const reply = data.reply.trim();
-      setMessages((m) => [...m, { role: "assistant", content: reply || "…" }]);
+
+      // Always consume as SSE stream
+      let fullText = "";
+      let isFirst = true;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          let parsed;
+          try { parsed = JSON.parse(line.slice(6)); } catch { continue; }
+          if (parsed.error) throw new Error(parsed.error);
+          if (parsed.text) {
+            fullText += parsed.text;
+            if (isFirst) {
+              isFirst = false;
+              setMessages((m) => [...m, { role: "assistant", content: fullText }]);
+            } else {
+              setMessages((m) => {
+                const updated = [...m];
+                updated[updated.length - 1] = { role: "assistant", content: fullText };
+                return updated;
+              });
+            }
+          }
+        }
+      }
+      const reply = fullText.trim();
       if (voiceOnRef.current && reply) speak(reply);
       else if (convoModeRef.current) startListening();
     } catch (e) {
@@ -260,10 +292,7 @@ export default function App() {
         ...m,
         {
           role: "assistant",
-          content:
-            "Something interrupted us. (Technical detail: " +
-            (e?.message || String(e)) +
-            ")",
+          content: "Something interrupted us. (" + (e?.message || String(e)) + ")",
         },
       ]);
       if (convoModeRef.current) startListening();
@@ -545,19 +574,6 @@ export default function App() {
           font-size: 11.5px; font-style: italic; color: var(--ink-soft); line-height: 1.6;
         }
         .care b { font-style: normal; font-weight: 500; color: var(--ember); }
-        .mic-note { font-size: 10.5px; opacity: 0.75; margin-top: 5px; }
-
-        .logos-scroll::-webkit-scrollbar { width: 8px; }
-        .logos-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
-
-        .chips { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 2px; animation: rise 0.6s ease both; }
-        .chip {
-          border: 1px solid var(--line); background: #fff; cursor: pointer;
-          color: var(--ink-soft); font-family: 'Newsreader', serif; font-size: 14.5px;
-          padding: 9px 15px; border-radius: 30px; line-height: 1.2;
-          transition: color .15s, border-color .15s, transform .12s;
-        }
-        .chip:hover { color: var(--ember); border-color: var(--ember-soft); transform: translateY(-1px); }
 
         .ways-link {
           border: none; background: none; cursor: pointer;
@@ -597,6 +613,9 @@ export default function App() {
           margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line);
           font-size: 13px; line-height: 1.6; color: var(--ink-soft); font-style: italic;
         }
+
+        .logos-scroll::-webkit-scrollbar { width: 8px; }
+        .logos-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
       `}</style>
 
       {!unlocked && (
@@ -619,7 +638,7 @@ export default function App() {
               {checking ? "Checking…" : "Enter"}
             </button>
             <p className="intro-note">
-              Logos is an anonymous AI reflection tool, not a therapist or crisis service. If things feel dangerous, reach a real person now: call or text <b>988</b>, text <b>HOME to 741741</b>, or your campus or school counselor.
+              Logos is a reflection tool, not a therapist or crisis service. If things feel dangerous, reach out now: <b>988</b> (call or text) or text <b>HOME to 741741</b>.
             </p>
           </div>
         </div>
@@ -641,14 +660,11 @@ export default function App() {
               <span>Nietzsche — a line Frankl carried</span>
             </p>
             <p className="intro-body">
-              Frankl found that we don't uncover meaning by searching inside ourselves, but by giving ourselves to something beyond us — a cause to serve, a person to love. One of the surest ways to begin is to offer your gifts to a cause you believe in. Volunteering with a group whose purpose matches your own is often where a purpose of your own first appears.
-            </p>
-            <p className="intro-body">
               This is a quiet place to look for your why: what's worth moving toward, and what you might give to the world. Not a plan for your whole life. Just the next true step.
             </p>
             <button className="begin" onClick={() => setStarted(true)}>Begin</button>
             <p className="intro-note">
-              A few honest things first. Logos is an AI, not a person — here to help you think, not to diagnose or treat anything. It isn't therapy or a crisis service. Your conversation is anonymous: no name, email, or account, and the app doesn't save what you say — it stays in your browser while you're here. What you type is sent to an AI provider to write each reply. If you ever choose to share your city to find local ways to volunteer, it's used only in that moment, not saved. If things feel dangerous or like too much, reach a real person now: call or text <b>988</b>, text <b>HOME to 741741</b>, or your campus or school counselor. Intended for 12th graders and college students.
+              Logos is a reflection tool, not a therapist or crisis service. If things feel dangerous, reach out now: <b>988</b> (call or text) or text <b>HOME to 741741</b>.
             </p>
           </div>
         </div>
@@ -701,20 +717,7 @@ export default function App() {
               </div>
             </div>
           ))}
-          {messages.length === 1 && !loading && (
-            <div className="chips">
-              {[
-                "I feel lost about my future",
-                "Help me use my talents to do some good",
-                "I don't know what to study",
-              ].map((c) => (
-                <button key={c} className="chip" onClick={() => send(c)}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          )}
-          {loading && (
+          {loading && messages[messages.length - 1]?.role !== "assistant" && (
             <div className="row assistant">
               <div className="bubble assistant">
                 <span className="who">Logos</span>
@@ -780,13 +783,8 @@ export default function App() {
           </button>
         </p>
         <p className="care">
-          Logos is a reflection tool, not a therapist or crisis service. Feeling heavy? Reach a trusted person, your campus or school counselor, the <b>988</b> Lifeline (call or text), or text <b>HOME to 741741</b>.
+          Logos is a reflection tool, not a therapist or crisis service. If things feel heavy, reach out — a trusted person, the <b>988</b> Lifeline (call or text), or text <b>HOME to 741741</b>.
         </p>
-        {speechSupported && (
-          <p className="care mic-note">
-            Voice uses your browser's speech feature, which may send audio to the browser maker to turn it into text.
-          </p>
-        )}
       </footer>
 
       {showResources && (

@@ -109,6 +109,7 @@ export default async function handler(req, res) {
       model: process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4.6",
       max_tokens: 1000,
       temperature: 0.8,
+      stream: true,
       messages: [{ role: "system", content: SYSTEM_PROMPT }, ...convo],
     };
 
@@ -130,16 +131,48 @@ export default async function handler(req, res) {
       body: JSON.stringify(payload),
     });
 
-    const data = await r.json();
     if (!r.ok) {
+      const errData = await r.json().catch(() => ({}));
       return res
         .status(r.status)
-        .json({ error: data?.error?.message || "Upstream error from OpenRouter" });
+        .json({ error: errData?.error?.message || "Upstream error from OpenRouter" });
     }
 
-    const reply = data?.choices?.[0]?.message?.content?.trim() || "";
-    return res.status(200).json({ reply });
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop(); // hold back any incomplete line
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const chunk = line.slice(6).trim();
+          if (chunk === "[DONE]") continue;
+          try {
+            const json = JSON.parse(chunk);
+            const text = json.choices?.[0]?.delta?.content || "";
+            if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`);
+          } catch { /* skip malformed chunk */ }
+        }
+      }
+    } finally {
+      res.end();
+    }
   } catch (e) {
-    return res.status(500).json({ error: e?.message || "Server error" });
+    if (!res.headersSent) {
+      return res.status(500).json({ error: e?.message || "Server error" });
+    }
+    try { res.write(`data: ${JSON.stringify({ error: e?.message || "Server error" })}\n\n`); } catch {}
+    res.end();
   }
 }
