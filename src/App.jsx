@@ -251,53 +251,41 @@ export default function App() {
         throw new Error(data?.error || "Unexpected response");
       }
 
-      const contentType = res.headers.get("content-type") || "";
-      if (contentType.includes("text/event-stream")) {
-        // Streaming path — append tokens as they arrive
-        let fullText = "";
-        let isFirst = true;
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split("\n");
-          buf = lines.pop();
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            let parsed;
-            try { parsed = JSON.parse(line.slice(6)); } catch { continue; }
-            if (parsed.error) throw new Error(parsed.error);
-            if (parsed.text) {
-              fullText += parsed.text;
-              if (isFirst) {
-                isFirst = false;
-                // First token: push placeholder message; dots hide via JSX condition below
-                setMessages((m) => [...m, { role: "assistant", content: fullText }]);
-              } else {
-                setMessages((m) => {
-                  const updated = [...m];
-                  updated[updated.length - 1] = { role: "assistant", content: fullText };
-                  return updated;
-                });
-              }
+      // Always consume as SSE stream
+      let fullText = "";
+      let isFirst = true;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          let parsed;
+          try { parsed = JSON.parse(line.slice(6)); } catch { continue; }
+          if (parsed.error) throw new Error(parsed.error);
+          if (parsed.text) {
+            fullText += parsed.text;
+            if (isFirst) {
+              isFirst = false;
+              setMessages((m) => [...m, { role: "assistant", content: fullText }]);
+            } else {
+              setMessages((m) => {
+                const updated = [...m];
+                updated[updated.length - 1] = { role: "assistant", content: fullText };
+                return updated;
+              });
             }
           }
         }
-        const reply = fullText.trim();
-        if (voiceOnRef.current && reply) speak(reply);
-        else if (convoModeRef.current) startListening();
-      } else {
-        // Fallback for non-streaming response
-        const data = await res.json();
-        if (typeof data?.reply !== "string") throw new Error(data?.error || "Unexpected response");
-        const reply = data.reply.trim();
-        setMessages((m) => [...m, { role: "assistant", content: reply || "…" }]);
-        if (voiceOnRef.current && reply) speak(reply);
-        else if (convoModeRef.current) startListening();
       }
+      const reply = fullText.trim();
+      if (voiceOnRef.current && reply) speak(reply);
+      else if (convoModeRef.current) startListening();
     } catch (e) {
       setMessages((m) => [
         ...m,
